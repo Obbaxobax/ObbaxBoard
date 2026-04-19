@@ -13,8 +13,9 @@
     let hotkeysDict = $state(new SvelteMap<string, Array<string>>());
 
     let assinging: string = $state("");
+    let setting: boolean = $state(false)
 
-    let menuOpen = $state(false);
+    let menuOpen = $state(true);
 
     let disableKey = $state("Grave");
 
@@ -23,22 +24,42 @@
         keys: Array<string>;
     }
 
+    let voiceChangerValues = [1.0, 0.5]
+
+    let inputDevices = $state([]);
+    let outputDevices = $state([]);
+    let currentInput = $state("");
+    let currentOutput = $state("");
+    let defaultsSet = false;
+
     onMount(async () => {   
         resourceDirPath = await resourceDir();
         sounds = await readDir(resourceDirPath + "\\Sounds");
 
         invoke("get_hotkeys_loaded_from_file");
+        invoke("get_audio_devices");
     })
 
     function playSound(name: string)
     {
+        
+        if (menuOpen) return;
+        console.log(name)
         invoke("play_sound", { name: name });
     }
 
     function assignHotkey(name: string) 
     {
+        if (name != "toggle" && menuOpen) return
         invoke("assign_hotkey", { name: name })
-        assinging = assinging == name ? "" : name;
+
+        if (name != "toggle") {
+            assinging = assinging == name ? "" : name;
+        }
+        else
+        {
+            setting = !setting
+        }
     }
 
     listen<Hotkey>('hotkey-assigned', (event) => {
@@ -55,6 +76,45 @@
         hotkeysDict.delete(event.payload.name);
         console.log(hotkeysDict);
     });
+
+    listen<[]>('input-devices', (event) => { 
+        inputDevices = event.payload;
+        console.log(inputDevices);
+    });
+
+    listen<[]>('output-devices', (event) => {    
+        outputDevices = event.payload;
+    });
+
+    listen<[]>('default-devices', (event) => {    
+        currentInput = event.payload[0];
+        defaultsSet = true;
+        currentOutput = event.payload[1];
+        defaultsSet = true;
+    });
+
+    function updateVoiceChanger(e: Event){
+        voiceChangerValues[0] = parseFloat(document.getElementById("freq").value);
+        voiceChangerValues[1] = parseFloat(document.getElementById("flang").value);
+        voiceChangerValues[2] = parseFloat(document.getElementById("bandpass").value);
+
+        let enabledEffects = [document.getElementById("freqtoggle").checked, document.getElementById("flangtoggle").checked, document.getElementById("bandtoggle").checked]
+
+        console.log("Update voice changer")
+        invoke("update_voice_changer", { value: voiceChangerValues, enabled: enabledEffects });
+    }
+
+    function updateDevices(e: Event) {
+        if (defaultsSet) {
+            defaultsSet = false;
+        };
+
+        currentInput = document.getElementById("input").value;
+        currentOutput = document.getElementById("output").value;
+        let devices = [currentInput, currentOutput];
+        console.log("Update devices")
+        invoke("change_devices", { values: devices });
+    }
 </script>
 
 <style>
@@ -77,18 +137,80 @@
     .transition {
         transition: translate 0.7s ease-in-out;
     }
+
+    input[type="checkbox"]:checked {
+        accent-color: var(--color-emerald-950);
+        border-color: black;
+        border-width: 2px;
+        justify-content: center;
+    }
+
+    input[type="checkbox"]:checked::before {
+        content: '✓'; /* Or use an SVG/image for the checkmark */
+        display: block;
+        color: white; /* Color of the checkmark */
+        font-size: 28px;
+        line-height: 36px; /* Adjust to vertically center the checkmark */
+        text-align: center;
+    }
+
+    input[type="checkbox"] {
+        appearance: none;
+        border-color: black;
+        border-width: 2px;
+        background-color: var(--color-emerald-950);
+    }
 </style>
 
 <div class="w-full h-screen fixed top-0 pointer-events-none {menuOpen ? "blurBackground" : ""}">
     <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="bg-emerald-900 w-10 h-10 fixed top-0 transition  {menuOpen ? "translate-x-72" : ""}" onclick={() => {menuOpen = !menuOpen}}>
+    <button class="bg-emerald-900 w-10 h-10 fixed top-0 transition pointer-events-auto {menuOpen ? "translate-x-72" : ""}" onclick={() => {menuOpen = !menuOpen}}>
         <!-- svelte-ignore a11y_missing_attribute -->
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Hamburger_icon.svg/640px-Hamburger_icon.svg.png"/>
+        <img src="https://www.svgrepo.com/show/506800/burger-menu.svg"/>
     </button>
-    <div class="bg-emerald-900 w-72 h-screen fixed top-0 transition flex flex-col items-center {menuOpen ? "" : "-translate-x-72"}">
+    <div class="bg-emerald-900 w-72 h-screen fixed top-0 transition flex flex-col items-center pointer-events-auto {menuOpen ? "" : "-translate-x-72"}">
         <div class="w-full flex flex-col items-center">
             <p class="text-white text-center text-lg w-full my-2">Soundboard Disable Key: {disableKey}</p>
-            <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">Set</button>
+            <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                {#if setting}
+                    Setting
+                {:else}
+                    Set Toggle Key
+                {/if}
+
+            </button>
+
+            <p class="text-white text-center text-lg w-full my-2">Input Device</p>
+            <select value={currentInput} id="input" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
+                {#each inputDevices as device}
+                    <option class="bg-black text-white" value={device}>{device}</option>
+                {/each}
+            </select>
+
+            <p class="text-white text-center text-lg w-full my-2">Output Device</p>
+            <select value={currentOutput} id="output" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
+                {#each outputDevices as device}
+                    <option class="bg-black text-white" value={device}>{device}</option>
+                {/each}
+            </select>
+            
+            <p class="text-white text-center text-lg w-full my-2">Frequency</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="freq" name="freq" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                <input id="freqtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+            </div>
+
+            <p class="text-white text-center text-lg w-full my-2">Feedback</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="flang" name="flang" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="0.5" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                <input id="flangtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+            </div>
+
+            <p class="text-white text-center text-lg w-full my-2">Bandpass</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="bandpass" name="bandpass" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="200.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                <input id="bandtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+            </div>
         </div>
     </div>
 </div>

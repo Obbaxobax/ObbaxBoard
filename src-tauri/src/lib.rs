@@ -1,13 +1,15 @@
 use std::{collections::HashMap, fs::{File, OpenOptions}, sync::Mutex};
 use commands::play_sound;
+use crossbeam_channel::bounded;
 use serde::Serialize;
 use soloud::Soloud;
-use tauri::{async_runtime::block_on, path::BaseDirectory, Manager};
+use tauri::{async_runtime::{block_on, spawn}, path::BaseDirectory, Manager};
 use mki::{Action, Keyboard};
 use webview2_com_sys::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
 use windows_core::Interface;
 
 mod commands;
+mod audio_filter;
 
 static LAST_KEY: Mutex<Vec<Keyboard>> = Mutex::new(Vec::new());
 
@@ -54,7 +56,12 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            
+            let voiceChangerValues: [f32; 3] = [1.0, 0.5, 200.0];
+            app.manage(Mutex::new(voiceChangerValues));
 
+            let voiceEnabled: [bool; 3] = [false, false, false];
+            app.manage(Mutex::new(voiceEnabled));
                         
             let mut active_hotkeys: HashMap<String, Vec<Keyboard>> = HashMap::new();
 
@@ -115,16 +122,6 @@ pub fn run() {
                 return Ok(());
             };
 
-            let _ = window.with_webview(|webview| unsafe {
-              webview.controller().SetZoomFactor(1.).unwrap();
-      
-              let icore_webview2 = webview.controller().CoreWebView2().unwrap();
-              let icore_webview2_settings = icore_webview2.Settings().unwrap();
-
-              let icore_webview2_settings3 = icore_webview2_settings.cast::<ICoreWebView2Settings3>().unwrap();
-              let _ = icore_webview2_settings3.SetAreBrowserAcceleratorKeysEnabled(false);
-            }).unwrap();
-
             let sl = Soloud::default().unwrap();
             app.manage(sl);
 
@@ -157,7 +154,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file])
+        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::get_audio_devices, commands::change_devices])
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

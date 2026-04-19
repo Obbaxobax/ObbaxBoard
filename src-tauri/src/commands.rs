@@ -26,7 +26,10 @@ pub async fn play_sound(name: String, handle: tauri::AppHandle) {
     let _ = wav.load(&path);
     sl.play(&wav);
     while sl.active_voice_count() > 0 {
-        std::thread::sleep(std::time::Duration::from_millis(100))
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if (!active.lock().unwrap().active) {
+            sl.stop_all();
+        }
     }
 }
 

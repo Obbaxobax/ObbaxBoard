@@ -28,8 +28,8 @@
 
     let inputDevices = $state([]);
     let outputDevices = $state([]);
-    let currentInput = $state("");
-    let currentOutput = $state("");
+    let currentInput: string = $state("");
+    let currentOutput: string = $state("");
     let defaultsSet = false;
 
     onMount(async () => {   
@@ -86,19 +86,36 @@
         outputDevices = event.payload;
     });
 
-    listen<[]>('default-devices', (event) => {    
+    listen<[]>('default-devices', (event) => {
+        if (event.payload.length < 2) return
+
+        // @ts-ignore
         currentInput = event.payload[0];
         defaultsSet = true;
+
+        // @ts-ignore
         currentOutput = event.payload[1];
         defaultsSet = true;
     });
 
     function updateVoiceChanger(e: Event){
-        voiceChangerValues[0] = parseFloat(document.getElementById("freq").value);
-        voiceChangerValues[1] = parseFloat(document.getElementById("flang").value);
-        voiceChangerValues[2] = parseFloat(document.getElementById("bandpass").value);
+        let freqHtml = document.getElementById("freq") as HTMLInputElement;
+        let flangHtml = document.getElementById("flang") as HTMLInputElement;
+        let bandHtml = document.getElementById("bandpass") as HTMLInputElement;
 
-        let enabledEffects = [document.getElementById("freqtoggle").checked, document.getElementById("flangtoggle").checked, document.getElementById("bandtoggle").checked]
+        voiceChangerValues[0] = parseFloat(freqHtml.value);
+        voiceChangerValues[1] = parseFloat(flangHtml.value);
+        voiceChangerValues[2] = parseFloat(bandHtml.value);
+
+        let freqTogHtml = document.getElementById("freqtoggle") as HTMLInputElement;
+        let flangTogHtml = document.getElementById("flangtoggle") as HTMLInputElement;
+        let bandTogHtml = document.getElementById("bandtoggle") as HTMLInputElement;
+
+        let enabledEffects = [
+            freqTogHtml.checked, 
+            flangTogHtml.checked, 
+            bandTogHtml.checked
+        ]
 
         console.log("Update voice changer")
         invoke("update_voice_changer", { value: voiceChangerValues, enabled: enabledEffects });
@@ -109,11 +126,24 @@
             defaultsSet = false;
         };
 
-        currentInput = document.getElementById("input").value;
-        currentOutput = document.getElementById("output").value;
+        let inputHtml = document.getElementById("input") as HTMLInputElement;
+        let outputHtml = document.getElementById("output") as HTMLInputElement;
+
+        currentInput = inputHtml.value;
+        currentOutput = outputHtml.value;
+
         let devices = [currentInput, currentOutput];
+
         console.log("Update devices")
         invoke("change_devices", { values: devices });
+    }
+
+    function updateSoundSettings(e: Event) {
+        let stackElement = document.getElementById("stackEnab") as HTMLInputElement
+        let stackEnabled = stackElement.checked;
+
+        console.log(stackEnabled);
+        invoke("update_sound_settings", { enabled: stackEnabled })
     }
 </script>
 
@@ -177,8 +207,12 @@
                 {:else}
                     Set Toggle Key
                 {/if}
-
             </button>
+
+            <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="stackEnab" class="h-10 w-10" type="checkbox" defaultChecked onchange={(e) => updateSoundSettings(e)}/>
+            </div>
 
             <p class="text-white text-center text-lg w-full my-2">Input Device</p>
             <select value={currentInput} id="input" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>

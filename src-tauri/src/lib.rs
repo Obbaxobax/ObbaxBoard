@@ -43,6 +43,11 @@ struct ActiveInner {
   active: bool,
 }
 
+#[derive(Default)]
+struct StackingInner {
+  active: bool,
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -72,6 +77,7 @@ pub fn run() {
                 let file = File::open(path)?;
 
                 let file_size = std::fs::metadata(path).expect("file metadata not found").len();
+
                 if file_size > 0 {
                     println!("Loading from file");
                     active_hotkeys = serde_json::from_reader(file).expect("uh oh");
@@ -97,7 +103,7 @@ pub fn run() {
                             });
                         }
                     }
-                } 
+                }
                 else 
                 {
                     let handle = app.handle().clone();
@@ -110,8 +116,22 @@ pub fn run() {
                     });
 
                     active_hotkeys.insert("toggle".to_owned(), vec![Keyboard::Grave]);
-                }            
+                }             
             }
+            else 
+            {
+                let handle = app.handle().clone();
+
+                mki::register_hotkey(&[Keyboard::Grave], move || {
+                    let active = handle.state::<Mutex<ActiveInner>>();
+                    let mut active = active.lock().unwrap();
+    
+                    active.active = !active.active;
+                });
+
+                active_hotkeys.insert("toggle".to_owned(), vec![Keyboard::Grave]);
+            }    
+            
 
             
 
@@ -130,6 +150,9 @@ pub fn run() {
 
             let active: ActiveInner = ActiveInner { active: true };
             app.manage(Mutex::new(active));
+
+            let stackingEnabled: StackingInner = StackingInner { active: true };
+            app.manage(Mutex::new(stackingEnabled));
 
             mki::bind_any_key(Action::callback_kb(|key|
             {
@@ -154,7 +177,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::get_audio_devices, commands::change_devices])
+        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::update_sound_settings, commands::get_audio_devices, commands::change_devices])
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

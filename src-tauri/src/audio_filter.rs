@@ -43,10 +43,9 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
     let mut in_device = host.default_input_device().unwrap();
 
     let defaults = handle.state::<Mutex<[String; 2]>>();
-    let mut defaults = defaults.lock().unwrap();
+    let defaults = defaults.lock().unwrap();
 
     in_devices.expect("").for_each(|device| {
-        println!("{}", device.name().unwrap());
         if device.name().expect("") == defaults[0] {
             in_device = device;
         }
@@ -66,7 +65,6 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
     let mut out_device = host.default_output_device().unwrap();
 
     out_devices.expect("").for_each(|device| {
-        println!("{}", device.name().unwrap());
         if device.name().expect("") == defaults[1] {
             out_device = device;
         }
@@ -93,7 +91,7 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
         drop(input_stream);
 
         let defaults = handle.state::<Mutex<[String; 2]>>();
-        let mut defaults = defaults.lock().unwrap();
+        let defaults = defaults.lock().unwrap();
 
         host.input_devices().expect("").for_each(|device| {
             if device.name().expect("") == defaults[0] {
@@ -143,7 +141,6 @@ where
     if let Ok(stream) = stream {
         if let Ok(()) = stream.play() {
             return stream;
-            std::mem::forget(stream);
         }
         else{
             return stream;
@@ -152,7 +149,6 @@ where
     else {
         return stream.unwrap();
     }
-    println!("Input stream built.");
 }
 
 fn read_data<T>(input: &[T], channels: usize, sender: Sender<(f32, f32)>)
@@ -183,7 +179,7 @@ where
     let channels = config.channels as usize;
 
     let values = handle.state::<Mutex<[f32; 3]>>();
-    let mut values = values.lock().unwrap();
+    let values = values.lock().unwrap();
 
     let freq = values[0];
     let flang = values[1];
@@ -191,7 +187,7 @@ where
 
     let input = An(InputNode::new(receiver.to_owned()));
     
-    let chorus = chorus(0, 0.0, 0.03, 0.2) | chorus(1, 0.0, 0.03, 0.2);
+    // let chorus = chorus(0, 0.0, 0.03, 0.2) | chorus(1, 0.0, 0.03, 0.2);
     // let res = dc(1.05) >> resample(input);
     println!("{}", freq);
 
@@ -242,21 +238,21 @@ where
         });
 
     let enabled = handle.state::<Mutex<[bool; 3]>>();
-    let mut enabled = enabled.lock().unwrap();
+    let enabled = enabled.lock().unwrap();
     
     let mut post_pass = Net::wrap(Box::new(input));
 
     let pass = bandpass_hz(bandpass, 2.0) | bandpass_hz(bandpass, 2.0);
-    if (enabled[2]) {
+    if enabled[2] {
         post_pass = post_pass >> pass;
     }
 
-    if (enabled[0]) {
+    if enabled[0] {
         post_pass = post_pass >> pitch_shift;
     }
 
     let flanger = flanger(flang, 0.05, 0.10, |t| lerp11(0.01, 0.02, sin_hz(0.1, t))) | flanger(flang, 0.05, 0.10, |t| lerp11(0.01, 0.02, sin_hz(0.1, t)));
-    if (enabled[1]) {
+    if enabled[1] {
         post_pass = post_pass >> flanger;
     }
 
@@ -280,7 +276,6 @@ where
     if let Ok(stream) = stream {
         if let Ok(()) = stream.play() {
             return stream;
-            std::mem::forget(stream);
         }
         else{
             return stream;
@@ -289,7 +284,6 @@ where
     else {
         return stream.unwrap();
     }
-    println!("Output stream built.");
 }
 
 fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> (f32, f32))

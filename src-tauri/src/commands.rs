@@ -1,16 +1,56 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, fs::File, io::BufReader, sync::Mutex};
 use cpal::traits::{DeviceTrait, HostTrait};
 use crossbeam_channel::{Sender, bounded};
-use fundsp::hacker::stack;
 use mki::Keyboard;
-use soloud::*;
-use tauri::{Emitter, Manager, async_runtime::{block_on, spawn}, path::BaseDirectory};
+use rodio::{Decoder, OutputStreamBuilder, Sink};
+use tauri::{Emitter, Manager, async_runtime::{block_on, spawn}};
 
-use crate::{ActiveInner, StackingInner, HotkeyAssignment, HotkeyRemoval, audio_filter, clear_last_key, get_last_key};
+use crate::{ActiveInner, HotkeyAssignment, HotkeyRemoval, SoundPitchInner, StackingInner, audio_filter, clear_last_key, get_last_key};
 
 #[tauri::command]
 pub async fn play_sound(name: String, handle: tauri::AppHandle) {
     let active = handle.state::<Mutex<ActiveInner>>();
+    if !active.lock().unwrap().active { return }
+
+    let stream = OutputStreamBuilder::open_default_stream()
+        .expect("Failed to open default audio stream");
+
+    // 2. Create a Sink which manages playback control (play, pause, volume, etc.).
+    let sink = Sink::connect_new(stream.mixer());
+
+    // 3. Load the audio file from disk.
+    let file = File::open("Sounds\\".to_owned() + &name)
+        .expect("Failed to open audio file");
+    
+    // Wrap it in a BufReader for more efficient streaming performance.
+    let reader = BufReader::new(file);
+
+    // 4. Decode the sound file into a source.
+    let source = Decoder::new(reader)
+        .expect("Failed to decode audio file");
+
+    // 5. Append the sound to the sink to begin playing it immediately.
+    sink.append(source);
+
+    let soundPitch = handle.state::<Mutex<SoundPitchInner>>();
+    let mut soundPitch = soundPitch.lock().unwrap();
+
+    sink.set_speed(soundPitch.pitch);
+
+    drop(soundPitch);
+
+    // 6. Block the current thread until the audio finishes playing.
+    // Without this, the program will instantly exit and close the audio stream.
+    while !sink.empty() {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if !active.lock().unwrap().active {
+            sink.stop();
+            break;
+        }
+    }
+
+
+    /* let active = handle.state::<Mutex<ActiveInner>>();
     if !active.lock().unwrap().active { return }
 
     let path_buf = handle.path().resolve("Sounds\\".to_owned() + &name, BaseDirectory::Resource).expect("Uh oh");
@@ -21,12 +61,23 @@ pub async fn play_sound(name: String, handle: tauri::AppHandle) {
     let sl = handle.state::<Soloud>();
 
     let stackingEnabled = handle.state::<Mutex<StackingInner>>();
+
+    match stackingEnabled.try_lock() {
+        Ok(guard) => {
+            if !guard.active {
+                sl.stop_all();
+            }
+        }
+        Err(_) => return
+    }
+
     let stackingEnabled = stackingEnabled.lock().unwrap();
 
     if !stackingEnabled.active {
         sl.stop_all();
     }
 
+    std::thread::sleep(std::time::Duration::from_millis(200));
     drop(stackingEnabled);
 
     let mut wav = audio::Wav::default();
@@ -38,7 +89,7 @@ pub async fn play_sound(name: String, handle: tauri::AppHandle) {
         if !active.lock().unwrap().active {
             sl.stop_all();
         }
-    }
+    } */
 }
 
 #[tauri::command]
@@ -102,6 +153,33 @@ pub async fn assign_hotkey(name: String, handle: tauri::AppHandle) {
             active.active = !active.active;
         });
     }
+    else if &name == "pitchup" {
+        mki::register_hotkey(prev_key.as_slice(), move || {
+            let pitch = handle.state::<Mutex<SoundPitchInner>>();
+            let mut pitch = pitch.lock().unwrap();
+            pitch.pitch += 0.1;
+
+            handle.emit("pitch-changed", pitch.pitch).expect("good");
+        });
+    }
+    else if &name == "pitchdown" {
+        mki::register_hotkey(prev_key.as_slice(), move || {
+            let pitch = handle.state::<Mutex<SoundPitchInner>>();
+            let mut pitch = pitch.lock().unwrap();
+            pitch.pitch -= 0.1;
+
+            handle.emit("pitch-changed", pitch.pitch).expect("good");
+        });
+    }
+    else if &name == "pitchreset" {
+        mki::register_hotkey(prev_key.as_slice(), move || {
+            let pitch = handle.state::<Mutex<SoundPitchInner>>();
+            let mut pitch = pitch.lock().unwrap();
+            pitch.pitch = 1.0;
+
+            handle.emit("pitch-changed", pitch.pitch).expect("good");
+        });
+    }
     else 
     {
         mki::register_hotkey(prev_key.as_slice(), move || {
@@ -135,6 +213,14 @@ pub fn update_sound_settings(enabled: bool, handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
+pub fn update_sound_pitch(pitch: f32, handle: tauri::AppHandle) {
+    let soundPitch = handle.state::<Mutex<SoundPitchInner>>();
+    let mut soundPitch = soundPitch.lock().unwrap();
+
+    soundPitch.pitch = pitch;
+}
+
+#[tauri::command]
 pub async fn get_audio_devices(handle: tauri::AppHandle) {
     let host = cpal::default_host();
 
@@ -158,7 +244,7 @@ pub async fn get_audio_devices(handle: tauri::AppHandle) {
 
     let out_device = host.default_output_device().unwrap();
     let in_device = host.default_input_device().unwrap();
-    let defaults = [in_device.name().expect(""), out_device.name().expect("")];
+    let defaults = [in_device.name().expect(""), out_device.name().expect(""), "Disabled".to_owned()];
     handle.emit("default-devices", defaults.clone()).unwrap();
 
 
@@ -172,8 +258,8 @@ pub async fn get_audio_devices(handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub async fn change_devices(values: [String; 2], handle: tauri::AppHandle) {
-    let defaults = handle.state::<Mutex<[String; 2]>>();
+pub async fn change_devices(values: [String; 3], handle: tauri::AppHandle) {
+    let defaults = handle.state::<Mutex<[String; 3]>>();
     let mut defaults = defaults.lock().unwrap();
 
     *defaults = values;

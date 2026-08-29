@@ -13,11 +13,14 @@
     let hotkeysDict = $state(new SvelteMap<string, Array<string>>());
 
     let assinging: string = $state("");
-    let setting: boolean = $state(false)
+    let setting: string = $state("");
 
     let menuOpen = $state(true);
 
     let disableKey = $state("Grave");
+    let pitchUpKey = $state("-");
+    let pitchDownKey = $state("+");
+    let pitchResetKey = $state("Backspace");
 
     type Hotkey = {
         name: string;
@@ -30,6 +33,7 @@
     let outputDevices = $state([]);
     let currentInput: string = $state("");
     let currentOutput: string = $state("");
+    let enabled: string = $state("Disabled");
     let defaultsSet = false;
 
     onMount(async () => {   
@@ -50,21 +54,45 @@
 
     function assignHotkey(name: string) 
     {
-        if (name != "toggle" && menuOpen) return
+        if (name != "toggle" && name != "pitchup" && name != "pitchdown" && name != "pitchreset" && menuOpen) return
         invoke("assign_hotkey", { name: name })
 
-        if (name != "toggle") {
+        if (name != "toggle" && name != "pitchup" && name != "pitchdown" && name != "pitchreset") {
             assinging = assinging == name ? "" : name;
         }
         else
         {
-            setting = !setting
+            console.log(name)
+            if (name == "toggle") {
+                setting = setting == "toggle" ? "" : "toggle";
+            }
+            else if (name == "pitchup") {
+                setting = setting == "pitchup" ? "" : "pitchup";
+            }
+            else if (name == "pitchdown") {
+                setting = setting == "pitchdown" ? "" : "pitchdown";
+            }
+            else if (name == "pitchreset") {
+                setting = setting == "pitchreset" ? "" : "pitchreset";
+            }
         }
     }
 
     listen<Hotkey>('hotkey-assigned', (event) => {
         if (event.payload.name == "toggle") {
             disableKey = event.payload.keys.toString();
+            return;
+        }
+        else if (event.payload.name == "pitchup") {
+            pitchUpKey = event.payload.keys.toString();
+            return;
+        }
+        else if (event.payload.name == "pitchdown") {
+            pitchDownKey = event.payload.keys.toString();
+            return;
+        }
+        else if (event.payload.name == "pitchreset") {
+            pitchResetKey = event.payload.keys.toString();
             return;
         }
 
@@ -98,6 +126,11 @@
         defaultsSet = true;
     });
 
+    listen<[]>('pitch-changed', (event) => {
+        let pitchInput = document.getElementById("soundPitch") as HTMLInputElement;
+        pitchInput.value = event.payload.toString();
+    });
+
     function updateVoiceChanger(e: Event){
         let freqHtml = document.getElementById("freq") as HTMLInputElement;
         let flangHtml = document.getElementById("flang") as HTMLInputElement;
@@ -128,14 +161,23 @@
 
         let inputHtml = document.getElementById("input") as HTMLInputElement;
         let outputHtml = document.getElementById("output") as HTMLInputElement;
+        let voiceEnab = document.getElementById("voiceEnab") as HTMLInputElement
 
         currentInput = inputHtml.value;
         currentOutput = outputHtml.value;
+        enabled = voiceEnab.checked == true ? "Enabled" : "Disabled";
 
-        let devices = [currentInput, currentOutput];
+        let devices = [currentInput, currentOutput, enabled];
 
-        console.log("Update devices")
+        console.log(devices)
         invoke("change_devices", { values: devices });
+    }
+
+    function updateSoundPitch(e: Event) {
+        let soundPitchHtml = document.getElementById("soundPitch") as HTMLInputElement;
+        let pitch = parseFloat(soundPitchHtml.value);
+
+        invoke("update_sound_pitch", { pitch: pitch })
     }
 
     function updateSoundSettings(e: Event) {
@@ -198,20 +240,57 @@
         <!-- svelte-ignore a11y_missing_attribute -->
         <img src="https://www.svgrepo.com/show/506800/burger-menu.svg"/>
     </button>
-    <div class="bg-emerald-900 w-72 h-screen fixed top-0 transition flex flex-col items-center pointer-events-auto {menuOpen ? "" : "-translate-x-72"}">
+    <div class="bg-emerald-900 w-72 h-screen fixed top-0 transition flex flex-col items-center pointer-events-auto overflow-scroll {menuOpen ? "" : "-translate-x-72"}">
         <div class="w-full flex flex-col items-center">
             <p class="text-white text-center text-lg w-full my-2">Soundboard Disable Key: {disableKey}</p>
             <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
-                {#if setting}
+                {#if setting == "toggle"}
                     Setting
                 {:else}
                     Set Toggle Key
                 {/if}
             </button>
 
-            <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
+            <!-- <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
             <div class="flex flex-row space-x-2 ">
                 <input id="stackEnab" class="h-10 w-10" type="checkbox" defaultChecked onchange={(e) => updateSoundSettings(e)}/>
+            </div> -->
+
+            <p class="text-white text-center text-lg w-full my-2">Pitch Up Key: {pitchUpKey}</p>
+            <button onclick={() => assignHotkey("pitchup")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                {#if setting == "pitchup"}
+                    Setting
+                {:else}
+                    Set Pitch Up Key
+                {/if}
+            </button>
+
+            <p class="text-white text-center text-lg w-full my-2">Pitch Down Key: {pitchDownKey}</p>
+            <button onclick={() => assignHotkey("pitchdown")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                {#if setting == "pitchdown"}
+                    Setting
+                {:else}
+                    Set Pitch Down Key
+                {/if}
+            </button>
+
+            <p class="text-white text-center text-lg w-full my-2">Pitch Reset Key: {pitchResetKey}</p>
+            <button onclick={() => assignHotkey("pitchreset")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                {#if setting == "pitchreset"}
+                    Setting
+                {:else}
+                    Set Pitch Reset Key
+                {/if}
+            </button>
+
+            <p class="text-white text-center text-lg w-full my-2">Sound Pitch</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="soundPitch" name="soundPitch" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateSoundPitch(e)}/>
+            </div>
+
+            <p class="text-white text-center text-lg w-full my-2">Voice Changer</p>
+            <div class="flex flex-row space-x-2 ">
+                <input id="voiceEnab" class="h-10 w-10" type="checkbox" defaultChecked={false} onchange={(e) => updateDevices(e)}/>
             </div>
 
             <p class="text-white text-center text-lg w-full my-2">Input Device</p>

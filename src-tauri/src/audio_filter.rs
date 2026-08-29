@@ -42,7 +42,7 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
     let in_devices = host.input_devices();
     let mut in_device = host.default_input_device().unwrap();
 
-    let defaults = handle.state::<Mutex<[String; 2]>>();
+    let defaults = handle.state::<Mutex<[String; 3]>>();
     let defaults = defaults.lock().unwrap();
 
     in_devices.expect("").for_each(|device| {
@@ -52,13 +52,7 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
     });
 
     let in_config = in_device.default_input_config().unwrap();
-    let mut input_stream: Stream;
-    match in_config.sample_format() {
-        cpal::SampleFormat::F32 => input_stream = run_in::<f32>(&in_device, &in_config.into(), sender.clone()),
-        cpal::SampleFormat::I16 => input_stream = run_in::<i16>(&in_device, &in_config.into(), sender.clone()),
-        cpal::SampleFormat::U16 => input_stream = run_in::<u16>(&in_device, &in_config.into(), sender.clone()),
-        format => {eprintln!("Unsupported sample format: {}", format); return;},
-    }
+    let mut input_stream: Option<Stream> = None;
 
     // Start output.
     let out_devices = host.output_devices();
@@ -71,15 +65,10 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
     });
 
     let out_config = out_device.default_output_config().unwrap();
-    let mut output_stream: Stream;
-    match out_config.sample_format() {
-        cpal::SampleFormat::F32 => output_stream = run_out::<f32>(&out_device, &out_config.into(), &receiver, handle.clone()),
-        cpal::SampleFormat::I16 => output_stream = run_out::<i16>(&out_device, &out_config.into(), &receiver, handle.clone()),
-        cpal::SampleFormat::U16 => output_stream = run_out::<u16>(&out_device, &out_config.into(), &receiver, handle.clone()),
-        format => {eprintln!("Unsupported sample format: {}", format); return;},
-    }
-    println!("Processing stereo input to stereo output.");
+    let mut output_stream: Option<Stream> = None;
+
     drop(defaults);
+    let mut enabled = false;
     
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -87,11 +76,25 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
         println!("{}", t.expect("a"));
 
         println!("reset");
-        drop(output_stream);
-        drop(input_stream);
 
-        let defaults = handle.state::<Mutex<[String; 2]>>();
+        let defaults = handle.state::<Mutex<[String; 3]>>();
         let defaults = defaults.lock().unwrap();
+
+        println!("{}", defaults[2]);
+        println!("{}", enabled);
+
+        if defaults[2] == "Disabled" && enabled == false {
+            continue;
+        }
+        else if defaults[2] == "Disabled" && enabled == true {
+            enabled = false;
+            drop(output_stream.take());
+            drop(input_stream.take());  
+            continue;
+        }
+        else if defaults[2] == "Enabled" && enabled == false {
+            enabled = true;
+        }
 
         host.input_devices().expect("").for_each(|device| {
             if device.name().expect("") == defaults[0] {
@@ -101,9 +104,9 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
 
         let in_config = in_device.default_input_config().unwrap();
         match in_config.sample_format() {
-            cpal::SampleFormat::F32 => input_stream = run_in::<f32>(&in_device, &in_config.into(), sender.clone()),
-            cpal::SampleFormat::I16 => input_stream = run_in::<i16>(&in_device, &in_config.into(), sender.clone()),
-            cpal::SampleFormat::U16 => input_stream = run_in::<u16>(&in_device, &in_config.into(), sender.clone()),
+            cpal::SampleFormat::F32 => input_stream = Some(run_in::<f32>(&in_device, &in_config.into(), sender.clone())),
+            cpal::SampleFormat::I16 => input_stream = Some(run_in::<i16>(&in_device, &in_config.into(), sender.clone())),
+            cpal::SampleFormat::U16 => input_stream = Some(run_in::<u16>(&in_device, &in_config.into(), sender.clone())),
             format => {eprintln!("Unsupported sample format: {}", format); return;},
         }
 
@@ -115,9 +118,9 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
 
         let out_config = out_device.default_output_config().unwrap();   
         match out_config.sample_format() {
-            cpal::SampleFormat::F32 => output_stream = run_out::<f32>(&out_device, &out_config.into(), &receiver, handle.clone()),
-            cpal::SampleFormat::I16 => output_stream = run_out::<i16>(&out_device, &out_config.into(), &receiver, handle.clone()),
-            cpal::SampleFormat::U16 => output_stream = run_out::<u16>(&out_device, &out_config.into(), &receiver, handle.clone()),
+            cpal::SampleFormat::F32 => output_stream = Some(run_out::<f32>(&out_device, &out_config.into(), &receiver, handle.clone())),
+            cpal::SampleFormat::I16 => output_stream = Some(run_out::<i16>(&out_device, &out_config.into(), &receiver, handle.clone())),
+            cpal::SampleFormat::U16 => output_stream = Some(run_out::<u16>(&out_device, &out_config.into(), &receiver, handle.clone())),
             format => {eprintln!("Unsupported sample format: {}", format); return;},
         }
 

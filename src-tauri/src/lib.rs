@@ -3,7 +3,7 @@ use commands::play_sound;
 use crossbeam_channel::bounded;
 use serde::Serialize;
 use soloud::Soloud;
-use tauri::{async_runtime::{block_on, spawn}, path::BaseDirectory, Manager};
+use tauri::{Emitter, Manager, async_runtime::{block_on, spawn}, path::BaseDirectory};
 use mki::{Action, Keyboard};
 use webview2_com_sys::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
 use windows_core::Interface;
@@ -46,6 +46,11 @@ struct ActiveInner {
 #[derive(Default)]
 struct StackingInner {
   active: bool,
+}
+
+#[derive(Default)]
+struct SoundPitchInner {
+  pitch: f32,
 }
 
 
@@ -94,6 +99,33 @@ pub fn run() {
                                 let mut active = active.lock().unwrap();
                 
                                 active.active = !active.active;
+                            });
+                        }
+                        else if name == "pitchup" {
+                            mki::register_hotkey(keys.as_slice(), move || {
+                                let pitch = handle.state::<Mutex<SoundPitchInner>>();
+                                let mut pitch = pitch.lock().unwrap();
+                                pitch.pitch += 0.1;
+
+                                handle.emit("pitch-changed", pitch.pitch).expect("good");
+                            });
+                        }
+                        else if name == "pitchdown" {
+                            mki::register_hotkey(keys.as_slice(), move || {
+                                let pitch = handle.state::<Mutex<SoundPitchInner>>();
+                                let mut pitch = pitch.lock().unwrap();
+                                pitch.pitch -= 0.1;
+
+                                handle.emit("pitch-changed", pitch.pitch).expect("good");
+                            });
+                        }
+                        else if &name == "pitchreset" {
+                            mki::register_hotkey(keys.as_slice(), move || {
+                                let pitch = handle.state::<Mutex<SoundPitchInner>>();
+                                let mut pitch = pitch.lock().unwrap();
+                                pitch.pitch = 1.0;
+
+                                handle.emit("pitch-changed", pitch.pitch).expect("good");
                             });
                         }
                         else 
@@ -154,6 +186,9 @@ pub fn run() {
             let stackingEnabled: StackingInner = StackingInner { active: true };
             app.manage(Mutex::new(stackingEnabled));
 
+            let soundPitch: SoundPitchInner = SoundPitchInner { pitch: 1.0 };
+            app.manage(Mutex::new(soundPitch));
+
             mki::bind_any_key(Action::callback_kb(|key|
             {
                 use Keyboard::*;
@@ -177,7 +212,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::update_sound_settings, commands::get_audio_devices, commands::change_devices])
+        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::update_sound_settings, commands::get_audio_devices, commands::change_devices, commands::update_sound_pitch])
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

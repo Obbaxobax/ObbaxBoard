@@ -5,7 +5,6 @@
     import { listen } from '@tauri-apps/api/event';
 	import { onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-    import { slide } from 'svelte/transition';
 
     let sounds: any[] = $state([]);
 
@@ -14,8 +13,6 @@
 
     let assinging: string = $state("");
     let setting: string = $state("");
-
-    let menuOpen = $state(true);
 
     let disableKey = $state("Grave");
     let pitchUpKey = $state("-");
@@ -46,15 +43,12 @@
 
     function playSound(name: string)
     {
-        
-        if (menuOpen) return;
         console.log(name)
         invoke("play_sound", { name: name });
     }
 
     function assignHotkey(name: string) 
     {
-        if (name != "toggle" && name != "pitchup" && name != "pitchdown" && name != "pitchreset" && menuOpen) return
         invoke("assign_hotkey", { name: name })
 
         if (name != "toggle" && name != "pitchup" && name != "pitchdown" && name != "pitchreset") {
@@ -194,22 +188,6 @@
         background-color: rgb(0, 10, 3);
     }
 
-    .blurBackground::before {
-        content: "";
-        background-color: #00000088;
-        filter: blur(5px);
-        width: 100%;
-        height: 100%;
-        position: fixed;
-        display: block;
-        top: 0;
-        z-index: -1;
-    }
-
-    .transition {
-        transition: translate 0.7s ease-in-out;
-    }
-
     input[type="checkbox"]:checked {
         accent-color: var(--color-emerald-950);
         border-color: black;
@@ -234,121 +212,118 @@
     }
 </style>
 
-<div class="w-full h-screen fixed top-0 pointer-events-none {menuOpen ? "blurBackground" : ""}">
-    <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="bg-emerald-900 w-10 h-10 fixed top-0 transition pointer-events-auto {menuOpen ? "translate-x-72" : ""}" onclick={() => {menuOpen = !menuOpen}}>
-        <!-- svelte-ignore a11y_missing_attribute -->
-        <img src="https://www.svgrepo.com/show/506800/burger-menu.svg"/>
-    </button>
-    <div class="bg-emerald-900 w-72 h-screen fixed top-0 transition flex flex-col items-center pointer-events-auto overflow-scroll {menuOpen ? "" : "-translate-x-72"}">
-        <div class="w-full flex flex-col items-center">
-            <p class="text-white text-center text-lg w-full my-2">Soundboard Disable Key: {disableKey}</p>
-            <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
-                {#if setting == "toggle"}
-                    Setting
-                {:else}
-                    Set Toggle Key
-                {/if}
-            </button>
+<div class="w-full flex flex-row">
+    <div class="w-fit pr-2 flex">
+        <div class="bg-emerald-900 w-72 flex flex-col items-center pointer-events-auto">
+            <div class="w-full flex flex-col items-center">
+                <p class="text-white text-center text-lg w-full my-2">Soundboard Disable Key: {disableKey}</p>
+                <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                    {#if setting == "toggle"}
+                        Setting
+                    {:else}
+                        Set Toggle Key
+                    {/if}
+                </button>
 
-            <!-- <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="stackEnab" class="h-10 w-10" type="checkbox" defaultChecked onchange={(e) => updateSoundSettings(e)}/>
-            </div> -->
+                <!-- <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="stackEnab" class="h-10 w-10" type="checkbox" defaultChecked onchange={(e) => updateSoundSettings(e)}/>
+                </div> -->
 
-            <p class="text-white text-center text-lg w-full my-2">Pitch Up Key: {pitchUpKey}</p>
-            <button onclick={() => assignHotkey("pitchup")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
-                {#if setting == "pitchup"}
-                    Setting
-                {:else}
-                    Set Pitch Up Key
-                {/if}
-            </button>
+                <p class="text-white text-center text-lg w-full my-2">Pitch Up Key: {pitchUpKey}</p>
+                <button onclick={() => assignHotkey("pitchup")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                    {#if setting == "pitchup"}
+                        Setting
+                    {:else}
+                        Set Pitch Up Key
+                    {/if}
+                </button>
 
-            <p class="text-white text-center text-lg w-full my-2">Pitch Down Key: {pitchDownKey}</p>
-            <button onclick={() => assignHotkey("pitchdown")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
-                {#if setting == "pitchdown"}
-                    Setting
-                {:else}
-                    Set Pitch Down Key
-                {/if}
-            </button>
+                <p class="text-white text-center text-lg w-full my-2">Pitch Down Key: {pitchDownKey}</p>
+                <button onclick={() => assignHotkey("pitchdown")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                    {#if setting == "pitchdown"}
+                        Setting
+                    {:else}
+                        Set Pitch Down Key
+                    {/if}
+                </button>
 
-            <p class="text-white text-center text-lg w-full my-2">Pitch Reset Key: {pitchResetKey}</p>
-            <button onclick={() => assignHotkey("pitchreset")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
-                {#if setting == "pitchreset"}
-                    Setting
-                {:else}
-                    Set Pitch Reset Key
-                {/if}
-            </button>
+                <p class="text-white text-center text-lg w-full my-2">Pitch Reset Key: {pitchResetKey}</p>
+                <button onclick={() => assignHotkey("pitchreset")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
+                    {#if setting == "pitchreset"}
+                        Setting
+                    {:else}
+                        Set Pitch Reset Key
+                    {/if}
+                </button>
 
-            <p class="text-white text-center text-lg w-full my-2">Sound Pitch</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="soundPitch" name="soundPitch" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateSoundPitch(e)}/>
-            </div>
+                <p class="text-white text-center text-lg w-full my-2">Sound Pitch</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="soundPitch" name="soundPitch" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateSoundPitch(e)}/>
+                </div>
 
-            <p class="text-white text-center text-lg w-full my-2">Voice Changer</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="voiceEnab" class="h-10 w-10" type="checkbox" defaultChecked={false} onchange={(e) => updateDevices(e)}/>
-            </div>
+                <p class="text-white text-center text-lg w-full my-2">Voice Changer</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="voiceEnab" class="h-10 w-10" type="checkbox" defaultChecked={false} onchange={(e) => updateDevices(e)}/>
+                </div>
 
-            <p class="text-white text-center text-lg w-full my-2">Input Device</p>
-            <select value={currentInput} id="input" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
-                {#each inputDevices as device}
-                    <option class="bg-black text-white" value={device}>{device}</option>
-                {/each}
-            </select>
+                <p class="text-white text-center text-lg w-full my-2">Input Device</p>
+                <select value={currentInput} id="input" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
+                    {#each inputDevices as device}
+                        <option class="bg-black text-white" value={device}>{device}</option>
+                    {/each}
+                </select>
 
-            <p class="text-white text-center text-lg w-full my-2">Output Device</p>
-            <select value={currentOutput} id="output" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
-                {#each outputDevices as device}
-                    <option class="bg-black text-white" value={device}>{device}</option>
-                {/each}
-            </select>
-            
-            <p class="text-white text-center text-lg w-full my-2">Frequency</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="freq" name="freq" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
-                <input id="freqtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
-            </div>
+                <p class="text-white text-center text-lg w-full my-2">Output Device</p>
+                <select value={currentOutput} id="output" class="w-52 bg-emerald-900  text-white " onchange={(e) => updateDevices(e)}>
+                    {#each outputDevices as device}
+                        <option class="bg-black text-white" value={device}>{device}</option>
+                    {/each}
+                </select>
+                
+                <p class="text-white text-center text-lg w-full my-2">Frequency</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="freq" name="freq" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="1.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                    <input id="freqtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+                </div>
 
-            <p class="text-white text-center text-lg w-full my-2">Feedback</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="flang" name="flang" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="0.5" type="number" onchange={(e) => updateVoiceChanger(e)}/>
-                <input id="flangtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
-            </div>
+                <p class="text-white text-center text-lg w-full my-2">Feedback</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="flang" name="flang" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="0.5" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                    <input id="flangtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+                </div>
 
-            <p class="text-white text-center text-lg w-full my-2">Bandpass</p>
-            <div class="flex flex-row space-x-2 ">
-                <input id="bandpass" name="bandpass" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="200.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
-                <input id="bandtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+                <p class="text-white text-center text-lg w-full my-2">Bandpass</p>
+                <div class="flex flex-row space-x-2 ">
+                    <input id="bandpass" name="bandpass" class="w-52 h-10 bg-black text-white text-center" readonly={false} defaultValue="200.0" type="number" onchange={(e) => updateVoiceChanger(e)}/>
+                    <input id="bandtoggle" class="h-10 w-10" type="checkbox" onchange={(e) => updateVoiceChanger(e)}/>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="mt-10 min-h-full w-full">
-    <div class="p-5 w-full">
-        <ul class="w-full grid grid-cols-3 self-center">
-            {#each sounds as sound}
-                <li class="justify-items-center">
-                    <button onclick={() => playSound(sound.name)} class="my-2 p-4 w-[70%] h-20 bg-[#002010] text-white align-top">
-                        {sound.name.split(".")[0]}
-                        {#if hotkeysDict.has(sound.name)}
-                            :
-                            {hotkeysDict.get(sound.name)}
-                        {/if}
-                    </button>
-                    <button onclick={() => assignHotkey(sound.name)} class="my-2 text-lg h-20 w-[25%] bg-[#003015] text-white align-top">            
-                        {#if assinging == sound.name}
-                            Assigning
-                        {:else}
-                            Assign
-                        {/if}
-                    </button>
-                </li>
-            {/each}
-        </ul>
+    <div class="min-h-full w-fit flex">
+        <div class="p-5 w-full">
+            <ul class="w-full grid grid-cols-4 self-center">
+                {#each sounds as sound}
+                    <li class="justify-items-center">
+                        <button onclick={() => playSound(sound.name)} class="my-2 p-4 w-[70%] h-28 bg-[#002010] text-white align-top">
+                            {sound.name.split(".")[0]}
+                            {#if hotkeysDict.has(sound.name)}
+                                :
+                                {hotkeysDict.get(sound.name)}
+                            {/if}
+                        </button>
+                        <button onclick={() => assignHotkey(sound.name)} class="my-2 text-lg h-28 w-[25%] bg-[#003015] text-white align-top">            
+                            {#if assinging == sound.name}
+                                Assigning
+                            {:else}
+                                Assign
+                            {/if}
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        </div>
     </div>
 </div>

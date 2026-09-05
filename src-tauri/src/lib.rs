@@ -1,12 +1,9 @@
 use std::{collections::HashMap, fs::{File, OpenOptions}, sync::Mutex};
 use commands::play_sound;
-use crossbeam_channel::bounded;
 use serde::Serialize;
 use soloud::Soloud;
-use tauri::{Emitter, Manager, async_runtime::{block_on, spawn}, path::BaseDirectory};
+use tauri::{Emitter, Manager, async_runtime::{block_on}, path::BaseDirectory};
 use mki::{Action, Keyboard};
-use webview2_com_sys::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
-use windows_core::Interface;
 
 mod commands;
 mod audio_filter;
@@ -168,11 +165,6 @@ pub fn run() {
             
 
             app.manage(Mutex::new(active_hotkeys));  
-
-            // Get the window
-            let Some(window) = app.get_webview_window("main") else {
-                return Ok(());
-            };
 
             let sl = Soloud::default().unwrap();
             app.manage(sl);

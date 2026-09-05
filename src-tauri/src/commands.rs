@@ -15,21 +15,16 @@ pub async fn play_sound(name: String, handle: tauri::AppHandle) {
     let stream = OutputStreamBuilder::open_default_stream()
         .expect("Failed to open default audio stream");
 
-    // 2. Create a Sink which manages playback control (play, pause, volume, etc.).
     let sink = Sink::connect_new(stream.mixer());
 
-    // 3. Load the audio file from disk.
     let file = File::open("Sounds\\".to_owned() + &name)
         .expect("Failed to open audio file");
-    
-    // Wrap it in a BufReader for more efficient streaming performance.
+
     let reader = BufReader::new(file);
 
-    // 4. Decode the sound file into a source.
     let source = Decoder::new(reader)
         .expect("Failed to decode audio file");
 
-    // 5. Append the sound to the sink to begin playing it immediately.
     sink.append(source);
 
     let soundPitch = handle.state::<Mutex<SoundPitchInner>>();
@@ -39,10 +34,9 @@ pub async fn play_sound(name: String, handle: tauri::AppHandle) {
 
     drop(soundPitch);
 
-    // 6. Block the current thread until the audio finishes playing.
-    // Without this, the program will instantly exit and close the audio stream.
     while !sink.empty() {
         std::thread::sleep(std::time::Duration::from_millis(100));
+
         if !active.lock().unwrap().active {
             sink.stop();
             break;

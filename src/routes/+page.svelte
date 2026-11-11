@@ -6,6 +6,10 @@
 	import { onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 
+    function clamp(value: number, min: number, max: number) {
+        return Math.min(Math.max(value, min), max);
+    };
+
     let sounds: any[] = $state([]);
 
     let resourceDirPath: string;
@@ -19,18 +23,31 @@
     let pitchDownKey = $state("+");
     let pitchResetKey = $state("Backspace");
 
-    type Hotkey = {
+    interface Hotkey {
         name: string;
         keys: Array<string>;
     }
 
-    let voiceChangerValues = [1.0, 0.5]
+    interface VoiceChangerValues {
+        freq: number,
+        freqEnab: boolean,
+        flang: number,
+        flangEnab: boolean,
+        bandpass: number,
+        bandEnab: boolean
+    }
+
+    interface AudioDevices {
+        outDevice: string,
+        inDevice: string,
+        enabled: boolean
+    }
 
     let inputDevices = $state([]);
     let outputDevices = $state([]);
     let currentInput: string = $state("");
     let currentOutput: string = $state("");
-    let enabled: string = $state("Disabled");
+    let enabled: boolean = $state(false);
     let defaultsSet = false;
 
     onMount(async () => {   
@@ -72,6 +89,7 @@
         }
     }
 
+    // Incoming Events
     listen<Hotkey>('hotkey-assigned', (event) => {
         if (event.payload.name == "toggle") {
             disableKey = event.payload.keys.toString();
@@ -125,27 +143,26 @@
         pitchInput.value = event.payload.toString();
     });
 
+    // Outgoing events
     function updateVoiceChanger(e: Event){
         let freqHtml = document.getElementById("freq") as HTMLInputElement;
         let flangHtml = document.getElementById("flang") as HTMLInputElement;
         let bandHtml = document.getElementById("bandpass") as HTMLInputElement;
-
-        voiceChangerValues[0] = parseFloat(freqHtml.value);
-        voiceChangerValues[1] = parseFloat(flangHtml.value);
-        voiceChangerValues[2] = parseFloat(bandHtml.value);
-
         let freqTogHtml = document.getElementById("freqtoggle") as HTMLInputElement;
         let flangTogHtml = document.getElementById("flangtoggle") as HTMLInputElement;
         let bandTogHtml = document.getElementById("bandtoggle") as HTMLInputElement;
 
-        let enabledEffects = [
-            freqTogHtml.checked, 
-            flangTogHtml.checked, 
-            bandTogHtml.checked
-        ]
+        const voiceChangerValues: VoiceChangerValues = {
+            freq: parseFloat(freqHtml.value),
+            freqEnab: freqTogHtml.checked, 
+            flang: clamp(parseFloat(flangHtml.value), -0.9, 0.9),
+            flangEnab: flangTogHtml.checked, 
+            bandpass: parseFloat(bandHtml.value),
+            bandEnab: bandTogHtml.checked
+        }
 
         console.log("Update voice changer")
-        invoke("update_voice_changer", { value: voiceChangerValues, enabled: enabledEffects });
+        invoke("update_voice_changer", { value: voiceChangerValues });
     }
 
     function updateDevices(e: Event) {
@@ -159,12 +176,15 @@
 
         currentInput = inputHtml.value;
         currentOutput = outputHtml.value;
-        enabled = voiceEnab.checked == true ? "Enabled" : "Disabled";
+        enabled = voiceEnab.checked;
 
-        let devices = [currentInput, currentOutput, enabled];
+        let audioDevices: AudioDevices = {
+            outDevice: currentOutput,
+            inDevice: currentInput,
+            enabled: enabled
+        }
 
-        console.log(devices)
-        invoke("change_devices", { values: devices });
+        invoke("change_devices", { values: audioDevices });
     }
 
     function updateSoundPitch(e: Event) {
@@ -172,14 +192,6 @@
         let pitch = parseFloat(soundPitchHtml.value);
 
         invoke("update_sound_pitch", { pitch: pitch })
-    }
-
-    function updateSoundSettings(e: Event) {
-        let stackElement = document.getElementById("stackEnab") as HTMLInputElement
-        let stackEnabled = stackElement.checked;
-
-        console.log(stackEnabled);
-        invoke("update_sound_settings", { enabled: stackEnabled })
     }
 </script>
 
@@ -214,7 +226,7 @@
 
 <div class="w-full flex flex-row">
     <div class="w-fit pr-2 flex">
-        <div class="bg-emerald-900 w-72 flex flex-col items-center pointer-events-auto">
+        <div class="bg-emerald-900 w-72 pb-10 flex flex-col items-center pointer-events-auto">
             <div class="w-full flex flex-col items-center">
                 <p class="text-white text-center text-lg w-full my-2">Soundboard Disable Key: {disableKey}</p>
                 <button onclick={() => assignHotkey("toggle")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
@@ -224,11 +236,6 @@
                         Set Toggle Key
                     {/if}
                 </button>
-
-                <!-- <p class="text-white text-center text-lg w-full my-2">Sound Stacking</p>
-                <div class="flex flex-row space-x-2 ">
-                    <input id="stackEnab" class="h-10 w-10" type="checkbox" defaultChecked onchange={(e) => updateSoundSettings(e)}/>
-                </div> -->
 
                 <p class="text-white text-center text-lg w-full my-2">Pitch Up Key: {pitchUpKey}</p>
                 <button onclick={() => assignHotkey("pitchup")} class="text-white text-center text-lg w-[90%] h-10 bg-emerald-950 rounded-md">
@@ -302,7 +309,7 @@
         </div>
     </div>
 
-    <div class="min-h-full w-fit flex">
+    <div class="min-h-full w-full flex">
         <div class="p-5 w-full">
             <ul class="w-full grid grid-cols-4 self-center">
                 {#each sounds as sound}

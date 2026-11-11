@@ -10,6 +10,8 @@ use fundsp::hacker32::*;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use tauri::Manager;
 
+use crate::VoiceChangerValues;
+
 #[derive(Clone)]
 pub struct InputNode {
     receiver: Receiver<(f32, f32)>,
@@ -51,7 +53,6 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
         }
     });
 
-    let in_config = in_device.default_input_config().unwrap();
     let mut input_stream: Option<Stream> = None;
 
     // Start output.
@@ -64,7 +65,6 @@ pub async fn start_audio(handle: tauri::AppHandle, r: Receiver<i16>) {
         }
     });
 
-    let out_config = out_device.default_output_config().unwrap();
     let mut output_stream: Option<Stream> = None;
 
     drop(defaults);
@@ -181,12 +181,12 @@ where
 
     let channels = config.channels as usize;
 
-    let values = handle.state::<Mutex<[f32; 3]>>();
+    let values = handle.state::<Mutex<VoiceChangerValues>>();
     let values = values.lock().unwrap();
 
-    let freq = values[0];
-    let flang = values[1];
-    let bandpass = values[2];
+    let freq = values.freq;
+    let flang = values.flang;
+    let bandpass = values.bandpass;
 
     let input = An(InputNode::new(receiver.to_owned()));
     
@@ -195,7 +195,7 @@ where
     println!("{}", freq);
 
     let pitch_shift = freq;
-    const FRAME_SIZE: usize = 512 * 2;
+    const FRAME_SIZE: usize = 1024 * 2;
     let mut input_phases = [0.0; FRAME_SIZE];
     let mut incoming_frequencies = [0.0; FRAME_SIZE];
     let mut outgoing_phases = [0.0; FRAME_SIZE];
@@ -206,6 +206,7 @@ where
 
     let pitch_shift = resynth::<U2, U2, _>(FRAME_SIZE, move |fft: &mut FftWindow| {
             for i in 0..(fft.bins() - 1) {
+                
                 let freq = fft.frequency(i);
                 // phase [-pi, pi]
                 let (amplitude, phase) = fft.at(0, i).to_polar();
@@ -223,6 +224,7 @@ where
                 incoming_frequencies[i] = i as f32 + bin_deviation;
 
                 input_phases[i] = phase;
+                
 
                 // calc output
                 let newbin = (i as f32 * pitch_shift).round() as usize;
@@ -239,23 +241,20 @@ where
                 }
             }
         });
-
-    let enabled = handle.state::<Mutex<[bool; 3]>>();
-    let enabled = enabled.lock().unwrap();
     
     let mut post_pass = Net::wrap(Box::new(input));
 
     let pass = bandpass_hz(bandpass, 2.0) | bandpass_hz(bandpass, 2.0);
-    if enabled[2] {
+    if values.bandEnab {
         post_pass = post_pass >> pass;
     }
 
-    if enabled[0] {
+    if values.freqEnab {
         post_pass = post_pass >> pitch_shift;
     }
 
     let flanger = flanger(flang, 0.05, 0.10, |t| lerp11(0.01, 0.02, sin_hz(0.1, t))) | flanger(flang, 0.05, 0.10, |t| lerp11(0.01, 0.02, sin_hz(0.1, t)));
-    if enabled[1] {
+    if values.flangEnab {
         post_pass = post_pass >> flanger;
     }
 

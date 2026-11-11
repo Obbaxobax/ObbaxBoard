@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::{File, OpenOptions}, sync::Mutex};
 use commands::play_sound;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use soloud::Soloud;
 use tauri::{Emitter, Manager, async_runtime::{block_on}, path::BaseDirectory};
 use mki::{Action, Keyboard};
@@ -35,19 +35,35 @@ struct HotkeyRemoval<'a> {
     name: &'a str,
 }
 
-#[derive(Default)]
+struct AssignmentActive {
+    active: bool,
+}
+
 struct ActiveInner {
   active: bool,
 }
 
-#[derive(Default)]
-struct StackingInner {
-  active: bool,
-}
-
-#[derive(Default)]
 struct SoundPitchInner {
   pitch: f32,
+}
+
+#[derive(Deserialize)]
+struct VoiceChangerValues {
+    freq: f32,
+    freqEnab: bool,
+    flang: f32, 
+    flangEnab: bool,
+    bandpass: f32,
+    bandEnab: bool,
+}
+
+#[derive(Serialize)]
+#[derive(Deserialize)]
+#[derive(Clone)]
+struct AudioDevices {
+    outDevice: String,
+    inDevice: String,
+    enabled: bool
 }
 
 
@@ -63,26 +79,47 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            
-            let voiceChangerValues: [f32; 3] = [1.0, 0.5, 200.0];
-            app.manage(Mutex::new(voiceChangerValues));
 
-            let voiceEnabled: [bool; 3] = [false, false, false];
-            app.manage(Mutex::new(voiceEnabled));
-                        
+            let voiceChangerValues: VoiceChangerValues = VoiceChangerValues { 
+                freq: 1.0, 
+                freqEnab: false, 
+                flang: 0.5, 
+                flangEnab: false, 
+                bandpass: 200.0, 
+                bandEnab: false 
+            };
+            app.manage(Mutex::new(voiceChangerValues));
+            
+            let sl = Soloud::default().unwrap();
+            app.manage(sl);
+
+            // Bool for when a hotkey is being assigned
+            let assignmentActive: AssignmentActive = AssignmentActive { active: false };
+            app.manage(Mutex::new(assignmentActive));
+
+            // Bool for if the soundboard is active
+            let active: ActiveInner = ActiveInner { active: true };
+            app.manage(Mutex::new(active));
+
+            // Value of sound effect pitch
+            let soundPitch: SoundPitchInner = SoundPitchInner { pitch: 1.0 };
+            app.manage(Mutex::new(soundPitch));
+            
+            // Generate hotkeys hashmap
+            // Loaded from file if the file exists, otherwise a default is created
             let mut active_hotkeys: HashMap<String, Vec<Keyboard>> = HashMap::new();
 
-            let path_buf = app.path().resolve("hotkeys.json".to_owned(), BaseDirectory::Resource).expect("Uh oh");
+            let path_buf = app.path().resolve("hotkeys.json".to_owned(), BaseDirectory::Resource).expect("Should never error as we are in the base directory");
             
             if path_buf.exists() {
                 let path = path_buf.to_str().unwrap();
                 let file = File::open(path)?;
 
-                let file_size = std::fs::metadata(path).expect("file metadata not found").len();
+                let file_size = std::fs::metadata(path).expect("File exists so metadata should too").len();
 
                 if file_size > 0 {
                     println!("Loading from file");
-                    active_hotkeys = serde_json::from_reader(file).expect("uh oh");
+                    active_hotkeys = serde_json::from_reader(file).expect("Should be json as written by the app");
                     println!("{:?}", active_hotkeys);
 
                     let hotkeys_clone = active_hotkeys.clone();
@@ -159,27 +196,9 @@ pub fn run() {
                 });
 
                 active_hotkeys.insert("toggle".to_owned(), vec![Keyboard::Grave]);
-            }    
-            
-
-            
+            }                
 
             app.manage(Mutex::new(active_hotkeys));  
-
-            let sl = Soloud::default().unwrap();
-            app.manage(sl);
-
-            let hotkey_mode = false;
-            app.manage(Mutex::new(hotkey_mode));
-
-            let active: ActiveInner = ActiveInner { active: true };
-            app.manage(Mutex::new(active));
-
-            let stackingEnabled: StackingInner = StackingInner { active: true };
-            app.manage(Mutex::new(stackingEnabled));
-
-            let soundPitch: SoundPitchInner = SoundPitchInner { pitch: 1.0 };
-            app.manage(Mutex::new(soundPitch));
 
             mki::bind_any_key(Action::callback_kb(|key|
             {
@@ -204,25 +223,25 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::update_sound_settings, commands::get_audio_devices, commands::change_devices, commands::update_sound_pitch])
+        .invoke_handler(tauri::generate_handler![commands::play_sound, commands::assign_hotkey, commands::get_hotkeys_loaded_from_file, commands::update_voice_changer, commands::get_audio_devices, commands::change_devices, commands::update_sound_pitch])
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|handle, events| {
             if matches!(events, tauri::RunEvent::ExitRequested { .. }) {
-                let path_buf = handle.path().resolve("hotkeys.json".to_owned(), BaseDirectory::Resource).expect("Uh oh");
+                let path_buf = handle.path().resolve("hotkeys.json".to_owned(), BaseDirectory::Resource).expect("Should never error as we are in the base directory");
                 let path = path_buf.to_str().unwrap();
                 let file = OpenOptions::new()
                     .read(true)
                     .write(true)
                     .create(true)
                     .truncate(true)
-                    .open(path).expect("Failed to open/create file.");
+                    .open(path).expect("The file should exist");
 
                 let hotkeys_list = handle.state::<Mutex<HashMap<String, Vec<Keyboard>>>>();
                 let hotkeys_list = hotkeys_list.lock().unwrap().clone();
                 
-                serde_json::to_writer(file, &hotkeys_list).expect("Write to file failed");
+                serde_json::to_writer(file, &hotkeys_list).expect("File exists and hotkeys_list exists so should not fail");
             }
         })
 }
